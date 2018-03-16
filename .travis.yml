@@ -3,7 +3,7 @@ sudo: required
 before_install:
 - sudo apt-get install zip
 - sudo apt install ccache
-- git clone --recursive https://github.com/DhirajSurvase/kernel-mtk -b nougat-7.0.0-release-xt1663 ~/kungfu
+- git clone --recursive https://github.com/PainKiller3/blitz_kernel_motorola_kungfu -b cm-14.1 ~/kungfu
 - git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 ~/kungfu/tc
 - git clone --recursive https://github.com/varunhardgamer/LazyFlasher ~/kungfu/lf
 script:
@@ -14,7 +14,7 @@ script:
 - export ARCH=arm64
 - export CROSS_COMPILE=~/kungfu/tc/bin/aarch64-linux-android-
 - mkdir -p out
-- make O=out kungfu_m_debug_defconfig
+- make O=out blitz_defconfig
 - make O=out -j128
 - cd ~/p1mk/out/arch/arm64/boot
 - curl --upload-file ./Image.gz-dtb https://transfer.sh/Image.gz-dtb
