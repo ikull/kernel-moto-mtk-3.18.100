@@ -55,6 +55,7 @@
 #include <net/ip6_fib.h>
 #include <net/ip6_route.h>
 #include <net/ip6_tunnel.h>
+#include <net/gre.h>
 
 
 static bool log_ecn_error = true;
@@ -82,16 +83,13 @@ static void ip6gre_tnl_link_config(struct ip6_tnl *t, int set_mtu);
 
 /*
    4 hash tables:
-
    3: (remote,local)
    2: (remote,*)
    1: (*,local)
    0: (*,*)
-
    We require exact key match i.e. if a key is present in packet
    it will match only tunnel with the same key; if it is not present,
    it will match only keyless tunnel.
-
    All keysless packets, if not matched configured keyless tunnels
    will match fallback tunnel.
  */
@@ -367,7 +365,7 @@ static void ip6gre_tunnel_uninit(struct net_device *dev)
 
 
 static void ip6gre_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
-		u8 type, u8 code, int offset, __be32 info)
+		       u8 type, u8 code, int offset, __be32 info)
 {
 	const struct ipv6hdr *ipv6h = (const struct ipv6hdr *)skb->data;
 	__be16 *p = (__be16 *)(skb->data + offset);
@@ -393,9 +391,13 @@ static void ip6gre_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
 	p = (__be16 *)(skb->data + offset);
 
 	t = ip6gre_tunnel_lookup(skb->dev, &ipv6h->daddr, &ipv6h->saddr,
+
 				flags & GRE_KEY ?
 				*(((__be32 *)p) + (grehlen / 4) - 1) : 0,
 				p[1]);
+
+				 key, greh->protocol);
+
 	if (t == NULL)
 		return;
 
@@ -406,19 +408,22 @@ static void ip6gre_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
 	case ICMPV6_DEST_UNREACH:
 		net_warn_ratelimited("%s: Path to destination invalid or inactive!\n",
 				     t->parms.name);
-		break;
+		if (code != ICMPV6_PORT_UNREACH)
+			break;
+		return;
 	case ICMPV6_TIME_EXCEED:
 		if (code == ICMPV6_EXC_HOPLIMIT) {
 			net_warn_ratelimited("%s: Too small hop limit or routing loop in tunnel!\n",
 					     t->parms.name);
+			break;
 		}
-		break;
+		return;
 	case ICMPV6_PARAMPROB:
 		teli = 0;
 		if (code == ICMPV6_HDR_FIELD)
 			teli = ip6_tnl_parse_tlv_enc_lim(skb, skb->data);
 
-		if (teli && teli == info - 2) {
+		if (teli && teli == be32_to_cpu(info) - 2) {
 			tel = (struct ipv6_tlv_tnl_enc_lim *) &skb->data[teli];
 			if (tel->encap_limit == 0) {
 				net_warn_ratelimited("%s: Too small encapsulation limit or routing loop in tunnel!\n",
@@ -428,13 +433,13 @@ static void ip6gre_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
 			net_warn_ratelimited("%s: Recipient unable to parse tunneled packet!\n",
 					     t->parms.name);
 		}
-		break;
+		return;
 	case ICMPV6_PKT_TOOBIG:
-		mtu = info - offset;
+		mtu = be32_to_cpu(info) - offset;
 		if (mtu < IPV6_MIN_MTU)
 			mtu = IPV6_MIN_MTU;
 		t->dev->mtu = mtu;
-		break;
+		return;
 	}
 
 	if (time_before(jiffies, t->err_time + IP6TUNNEL_ERR_TIMEO))
@@ -889,7 +894,6 @@ static int ip6gre_xmit_other(struct sk_buff *skb, struct net_device *dev)
 		encap_limit = t->parms.encap_limit;
 
 	memcpy(&fl6, &t->fl.u.ip6, sizeof(fl6));
-	fl6.flowi6_proto = skb->protocol;
 
 	err = ip6gre_xmit2(skb, dev, 0, &fl6, encap_limit, &mtu);
 
