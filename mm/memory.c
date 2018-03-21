@@ -2626,13 +2626,10 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	/* File mapping without ->vm_ops ? */
 	if (vma->vm_flags & VM_SHARED)
 		return VM_FAULT_SIGBUS;
-<<<<<<< HEAD
 
 	/* Check if we need to add a guard page to the stack */
 	if (check_stack_guard_page(vma, address) < 0)
 		return VM_FAULT_SIGSEGV;
-=======
->>>>>>> 1fa5f92... Merge tag 'v3.18.35'>'3.18.100' by @DhirajSurvase
 
 	/* Use the zero-page for reads */
 	if (!(flags & FAULT_FLAG_WRITE)) {
@@ -3205,10 +3202,7 @@ static int handle_pte_fault(struct mm_struct *mm,
 			if (vma->vm_ops)
 				return do_linear_fault(mm, vma, address,
 						pte, pmd, flags, entry);
-<<<<<<< HEAD
 
-=======
->>>>>>> 1fa5f92... Merge tag 'v3.18.35'>'3.18.100' by @DhirajSurvase
 			return do_anonymous_page(mm, vma, address,
 						 pte, pmd, flags);
 		}
