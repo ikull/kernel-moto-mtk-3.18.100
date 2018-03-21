@@ -14,6 +14,7 @@
 #include <net/netfilter/xt_rateest.h>
 
 
+<<<<<<< HEAD
 static bool
 xt_rateest_mt(const struct sk_buff *skb, struct xt_action_param *par)
 {
@@ -45,9 +46,57 @@ xt_rateest_mt(const struct sk_buff *skb, struct xt_action_param *par)
 		} else {
 			bps2 = r->bps;
 			pps2 = r->pps;
+=======
+#define RATEEST_HSIZE	16
+static struct hlist_head rateest_hash[RATEEST_HSIZE] __read_mostly;
+static unsigned int jhash_rnd __read_mostly;
+static bool rnd_inited __read_mostly;
+
+static unsigned int xt_rateest_hash(const char *name)
+{
+	return jhash(name, FIELD_SIZEOF(struct xt_rateest, name), jhash_rnd) &
+	       (RATEEST_HSIZE - 1);
+}
+
+static void xt_rateest_hash_insert(struct xt_rateest *est)
+{
+	unsigned int h;
+
+	h = xt_rateest_hash(est->name);
+	hlist_add_head(&est->list, &rateest_hash[h]);
+}
+
+static struct xt_rateest *__xt_rateest_lookup(const char *name)
+{
+	struct xt_rateest *est;
+	unsigned int h;
+
+	h = xt_rateest_hash(name);
+	hlist_for_each_entry(est, &rateest_hash[h], list) {
+		if (strcmp(est->name, name) == 0) {
+			est->refcnt++;
+			return est;
+>>>>>>> 1fa5f92... Merge tag 'v3.18.35'>'3.18.100' by @DhirajSurvase
 		}
 		spin_unlock_bh(&info->est2->lock);
 	}
+<<<<<<< HEAD
+=======
+
+	return NULL;
+}
+
+struct xt_rateest *xt_rateest_lookup(const char *name)
+{
+	struct xt_rateest *est;
+
+	mutex_lock(&xt_rateest_mutex);
+	est = __xt_rateest_lookup(name);
+	mutex_unlock(&xt_rateest_mutex);
+	return est;
+}
+EXPORT_SYMBOL_GPL(xt_rateest_lookup);
+>>>>>>> 1fa5f92... Merge tag 'v3.18.35'>'3.18.100' by @DhirajSurvase
 
 	switch (info->mode) {
 	case XT_RATEEST_MATCH_LT:
@@ -80,9 +129,29 @@ static int xt_rateest_mt_checkentry(const struct xt_mtchk_param *par)
 	struct xt_rateest *est1, *est2;
 	int ret = -EINVAL;
 
+<<<<<<< HEAD
 	if (hweight32(info->flags & (XT_RATEEST_MATCH_ABS |
 				     XT_RATEEST_MATCH_REL)) != 1)
 		goto err1;
+=======
+	mutex_lock(&xt_rateest_mutex);
+	est = __xt_rateest_lookup(info->name);
+	if (est) {
+		mutex_unlock(&xt_rateest_mutex);
+		/*
+		 * If estimator parameters are specified, they must match the
+		 * existing estimator.
+		 */
+		if ((!info->interval && !info->ewma_log) ||
+		    (info->interval != est->params.interval ||
+		     info->ewma_log != est->params.ewma_log)) {
+			xt_rateest_put(est);
+			return -EINVAL;
+		}
+		info->est = est;
+		return 0;
+	}
+>>>>>>> 1fa5f92... Merge tag 'v3.18.35'>'3.18.100' by @DhirajSurvase
 
 	if (!(info->flags & (XT_RATEEST_MATCH_BPS | XT_RATEEST_MATCH_PPS)))
 		goto err1;
@@ -108,13 +177,20 @@ static int xt_rateest_mt_checkentry(const struct xt_mtchk_param *par)
 			goto err2;
 	}
 
+<<<<<<< HEAD
 	info->est1 = est1;
 	info->est2 = est2;
+=======
+	info->est = est;
+	xt_rateest_hash_insert(est);
+	mutex_unlock(&xt_rateest_mutex);
+>>>>>>> 1fa5f92... Merge tag 'v3.18.35'>'3.18.100' by @DhirajSurvase
 	return 0;
 
 err2:
 	xt_rateest_put(est1);
 err1:
+	mutex_unlock(&xt_rateest_mutex);
 	return ret;
 }
 
